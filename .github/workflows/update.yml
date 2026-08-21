@@ -1,0 +1,29 @@
+name: Update Saham Daily
+
+on:
+  schedule:
+    # Berjalan otomatis setiap hari Senin sampai Jumat pukul 17:00 WIB (10:00 UTC)
+    - cron: '0 10 * * 1-5'
+  workflow_dispatch: # Tombol manual di web GitHub jika sewaktu-waktu ingin dijalankan manual
+
+jobs:
+  run-python-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install yfinance pandas numpy gspread oauth2client
+
+      - name: Run Script
+        env:
+          GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          python update_saham.py
