@@ -8,35 +8,27 @@ import yfinance as yf
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# 1. Konfigurasi Kredensial Fleksibel (GitHub Secrets vs Google Colab Lokal)
+# 1. Konfigurasi Kredensial
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
 if "GCP_SA_KEY" in os.environ:
-    # Jika berjalan di GitHub Actions, ambil dari Secret
     key_dict = json.loads(os.environ["GCP_SA_KEY"])
     creds = ServiceAccountCredentials.from_json_keyfile_dict(key_dict, scope)
 else:
-    # Jika berjalan manual di Colab / Lokal (menggunakan file credentials.json)
     creds = ServiceAccountCredentials.from_json_keyfile_name('credentials.json', scope)
 
 client = gspread.authorize(creds)
-
-# Buka file Google Sheets utama
 spreadsheet = client.open("DB_Master_Saham")
 
-# Buka tab sumber ticker dan tab tujuan data
 ticker_sheet = spreadsheet.worksheet("Daftar_Ticker")
-target_sheet = spreadsheet.worksheet("Sheet1") # Atau ganti nama tab tujuan jika berbeda
+target_sheet = spreadsheet.worksheet("Sheet1") 
 
-# 2. Ambil seluruh daftar ticker dari tab 'Daftar_Ticker' (Kolom A)
-# Mengabaikan baris pertama jika itu adalah header (misal: "Ticker")
 raw_tickers = ticker_sheet.col_values(1)
 daftar_ticker = [t.strip() for t in raw_tickers if t.strip() and t.strip().upper() != "TICKER"]
 
 print(f"📋 Ditemukan {len(daftar_ticker)} emiten di dalam tab 'Daftar_Ticker'.")
 print("🚀 Memulai proses pengunduhan dan perhitungan teknikal...\n")
 
-# 3. Siapkan Header untuk Database
 header = [
     "Ticker", "Nama_Emiten", "Sektor", "Harga_Terakhir", 
     "Market_Cap", "Div_Yield", "PBV", "MA50", "RSI", "MACD", "Signal_Line", "Last_Updated"
@@ -44,7 +36,6 @@ header = [
 rows_to_insert = [header]
 waktu_sekarang = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
-# 4. Looping untuk setiap emiten
 sukses = 0
 gagal = 0
 
@@ -54,7 +45,8 @@ for i, t in enumerate(daftar_ticker, start=1):
         info = stock.info
         df = stock.history(period="1y")
         
-        # Hitung Indikator Teknikal jika data historis tersedia
+        ma50_val, rsi_val, macd_val, signal_val = 0, 0, 0, 0
+        
         if not df.empty:
             df['MA50'] = df['Close'].rolling(window=50).mean()
             
@@ -69,55 +61,61 @@ for i, t in enumerate(daftar_ticker, start=1):
             df['MACD'] = exp1 - exp2
             df['Signal_Line'] = df['MACD'].ewm(span=9, adjust=False).mean()
 
-            ma50_val = df['MA50'].iloc[-1]
-            rsi_val = df['RSI'].iloc[-1]
-            macd_val = df['MACD'].iloc[-1]
-            signal_val = df['Signal_Line'].iloc[-1]
-        else:
-            ma50_val, rsi_val, macd_val, signal_val = 0, 0, 0, 0
+            # Ambil nilai terakhir dan pastikan bukan NaN/Inf
+            if not pd.isna(df['MA50'].iloc[-1]): ma50_val = float(df['MA50'].iloc[-1])
+            if not pd.isna(df['RSI'].iloc[-1]): rsi_val = float(df['RSI'].iloc[-1])
+            if not pd.isna(df['MACD'].iloc[-1]): macd_val = float(df['MACD'].iloc[-1])
+            if not pd.isna(df['Signal_Line'].iloc[-1]): signal_val = float(df['Signal_Line'].iloc[-1])
 
-        # Ekstraksi Data Fundamental
         nama = info.get('longName', t)
         sektor = info.get('sector', 'N/A')
-        harga = info.get('currentPrice', df['Close'].iloc[-1] if not df.empty else 0)
-        market_cap = info.get('marketCap', 0)
-        div_yield = info.get('dividendYield', 0)
-        pbv = info.get('priceToBook', 0)
         
-        # Normalisasi persentase dividend yield
+        # Ambil harga terakhir yang aman
+        harga = info.get('currentPrice', None)
+        if not harga and not df.empty:
+            harga = float(df['Close'].iloc[-1])
+        elif not harga:
+            harga = 0.0
+
+        market_cap = info.get('marketCap', 0)
+        if not market_cap or pd.isna(market_cap): market_cap = 0
+
+        div_yield = info.get('dividendYield', 0)
         if div_yield and div_yield < 1.0:
             div_yield = div_yield * 100
+        if not div_yield or pd.isna(div_yield): div_yield = 0
 
-        # Masukkan ke dalam baris data
+        pbv = info.get('priceToBook', 0)
+        if not pbv or pd.isna(pbv) or np.isinf(pbv): pbv = 0
+
+        # Masukkan ke baris data (bersihkan nilai tak valid)
         rows_to_insert.append([
-            t, 
-            nama, 
-            sektor, 
-            harga, 
-            market_cap, 
-            f"{div_yield:.2f}%" if div_yield else "0%", 
-            pbv, 
+            str(t), 
+            str(nama), 
+            str(sektor), 
+            round(float(harga), 2), 
+            int(market_cap), 
+            f"{float(div_yield):.2f}%" if div_yield else "0%", 
+            round(float(pbv), 2), 
             round(ma50_val, 2), 
-            round(rsi_val, 2) if not np.isnan(rsi_val) else 0, 
-            round(macd_val, 2) if not np.isnan(macd_val) else 0, 
-            round(signal_val, 2) if not np.isnan(signal_val) else 0,
-            waktu_sekarang
+            round(rsi_val, 2), 
+            round(macd_val, 2), 
+            round(signal_val, 2),
+            str(waktu_sekarang)
         ])
         
-        print(f"[{i}/{len(daftar_ticker)}] Berhasil memproses: {t}")
+        print(f"[{i}/{len(daftar_ticker)}] Berhasil memproses: {t}", flush=True)
         sukses += 1
         
     except Exception as e:
-        print(f"[{i}/{len(daftar_ticker)}] Gagal memproses {t}: {e}")
+        print(f"[{i}/{len(daftar_ticker)}] Gagal memproses {t}: {e}", flush=True)
         gagal += 1
     
-    # Jeda 1 detik per emiten agar aman dari blokir Yahoo Finance (*rate limit*)
     time.sleep(1)
 
-# 5. Tulis seluruh data ke Google Sheets secara massal (Bulk Update)
-print("\n🔄 Sedang memperbarui data ke Google Sheets...")
+print("\n🔄 Sedang memperbarui data ke Google Sheets...", flush=True)
 target_sheet.clear()
-target_sheet.update('A1', rows_to_insert)
+# Menggunakan format parameter eksplisit untuk gspread versi baru
+target_sheet.update(range_name='A1', values=rows_to_insert)
 
-print(f"\n🎉 Selesai! Total Berhasil: {sukses} emiten | Total Gagal: {gagal} emiten.")
-print("📊 Database Google Sheets Anda kini sudah terisi penuh.")
+print(f"\n🎉 Selesai! Total Berhasil: {sukses} emiten | Total Gagal: {gagal} emiten.", flush=True)
