@@ -1,5 +1,8 @@
 name: Update Saham Daily
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Berjalan otomatis setiap hari Senin sampai Jumat pukul 17:00 WIB (10:00 UTC)
