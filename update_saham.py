@@ -159,7 +159,7 @@ try:
     subprocess.run(["git", "config", "--global", "user.name", "GitHub Actions Bot"], check=True)
     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
     subprocess.run(["git", "add", "saham_history.json"], check=True)
-    subprocess.run(["git", "commit", -m "Auto-update: Refresh profil fundamental dan data historis"], check=True)
+    subprocess.run(["git", "commit", "-m", "Auto-update: Refresh profil fundamental dan data historis"], check=True)
     subprocess.run(["git", "push"], check=True)
     print("✅ Berhasil melakukan push ke GitHub!", flush=True)
 except Exception as git_err:
