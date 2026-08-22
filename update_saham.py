@@ -28,7 +28,7 @@ raw_tickers = ticker_sheet.col_values(1)
 daftar_ticker = [t.strip() for t in raw_tickers if t.strip() and t.strip().upper() != "TICKER"]
 
 print(f"📋 Ditemukan {len(daftar_ticker)} emiten di dalam tab 'Daftar_Ticker'.")
-print("🚀 Memulai pengunduhan data historis 5 tahun & kalkulasi teknikal...\n", flush=True)
+print("🚀 Memulai pengunduhan data historis 3 tahun & kalkulasi teknikal...\n", flush=True)
 
 header = [
     "Ticker", "Nama_Emiten", "Sektor", "Harga_Terakhir", 
@@ -47,8 +47,8 @@ for i, t in enumerate(daftar_ticker, start=1):
     try:
         stock = yf.Ticker(t)
         info = stock.info
-        # Tarik data historis 5 tahun
-        df = stock.history(period="5y")
+        # Tarik data historis 3 tahun
+        df = stock.history(period="3y")
         
         ma50_val, rsi_val, macd_val, signal_val = 0, 0, 0, 0
         
