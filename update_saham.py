@@ -55,6 +55,7 @@ for i, t in enumerate(daftar_ticker, start=1):
         if not df.empty:
             # Hitung Indikator Teknikal
             df['MA50'] = df['Close'].rolling(window=50).mean()
+            df['MA20'] = df['Close'].rolling(window=20).mean()
             
             delta = df['Close'].diff()
             gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
