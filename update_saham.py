@@ -37,8 +37,8 @@ header = [
 rows_to_insert = [header]
 waktu_sekarang = datetime.datetime.now().strftime('%Y-%m-%d %H:%M')
 
-# Kamus besar untuk menampung seluruh data historis 5 tahun untuk file JSON
-master_history_json = {}
+# Kamus besar untuk menampung data lengkap (Profil Fundamental + Histori) untuk file JSON
+master_complete_json = {}
 
 sukses = 0
 gagal = 0
@@ -73,20 +73,6 @@ for i, t in enumerate(daftar_ticker, start=1):
             if not pd.isna(df['MACD'].iloc[-1]): macd_val = float(df['MACD'].iloc[-1])
             if not pd.isna(df['Signal_Line'].iloc[-1]): signal_val = float(df['Signal_Line'].iloc[-1])
 
-            # Persiapkan data untuk JSON (Ubah Index tanggal menjadi string format YYYY-MM-DD)
-            df_clean = df.reset_index()
-            # Ambil kolom penting saja agar ukuran JSON tetap ramping
-            cols_to_keep = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'MA50', 'RSI', 'MACD', 'Signal_Line']
-            existing_cols = [c for c in cols_to_keep if c in df_clean.columns]
-            df_subset = df_clean[existing_cols].copy()
-            
-            # Format tanggal dan bersihkan nilai NaN/Inf menjadi null/0
-            df_subset['Date'] = pd.to_datetime(df_subset['Date']).dt.strftime('%Y-%m-%d')
-            df_subset = df_subset.replace({np.nan: None, np.inf: None, -np.inf: None})
-            
-            # Masukkan ke kamus master
-            master_history_json[t] = df_subset.to_dict(orient='records')
-
         nama = info.get('longName', t)
         sektor = info.get('sector', 'N/A')
         
@@ -106,6 +92,31 @@ for i, t in enumerate(daftar_ticker, start=1):
 
         pbv = info.get('priceToBook', 0)
         if not pbv or pd.isna(pbv) or np.isinf(pbv): pbv = 0
+
+        # Persiapkan data histori untuk JSON
+        df_subset = []
+        if not df.empty:
+            df_clean = df.reset_index()
+            cols_to_keep = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'MA50', 'RSI', 'MACD', 'Signal_Line']
+            existing_cols = [c for c in cols_to_keep if c in df_clean.columns]
+            df_subset_temp = df_clean[existing_cols].copy()
+            
+            df_subset_temp['Date'] = pd.to_datetime(df_subset_temp['Date']).dt.strftime('%Y-%m-%d')
+            df_subset_temp = df_subset_temp.replace({np.nan: None, np.inf: None, -np.inf: None})
+            df_subset = df_subset_temp.to_dict(orient='records')
+
+        # --- PERUBAHAN UTAMA: Gabungkan Profile dan History ke dalam satu key Ticker ---
+        master_complete_json[t] = {
+            "profile": {
+                "name": str(nama),
+                "sector": str(sektor),
+                "marketCap": int(market_cap),
+                "divYield": f"{float(div_yield):.2f}%" if div_yield else "0%",
+                "pbv": round(float(pbv), 2),
+                "price": round(float(harga), 2)
+            },
+            "history": df_subset
+        }
 
         # Data ringkasan untuk Google Sheets
         rows_to_insert.append([
@@ -132,23 +143,23 @@ for i, t in enumerate(daftar_ticker, start=1):
     
     time.sleep(1)
 
-# 2. Simpan Data Historis 5 Tahun ke File JSON
-print("\n💾 Menyimpan data historis ke file 'saham_history.json'...", flush=True)
+# 2. Simpan Data Lengkap (Profil + Histori) ke File JSON
+print("\n💾 Menyimpan data lengkap ke file 'saham_history.json'...", flush=True)
 with open('saham_history.json', 'w') as f:
-    json.dump(master_history_json, f)
+    json.dump(master_complete_json, f, indent=4)
 
 # 3. Perbarui Google Sheets dengan Ringkasan Hari Terakhir
 print("🔄 Sedang memperbarui ringkasan ke Google Sheets...", flush=True)
 target_sheet.clear()
 target_sheet.update(range_name='A1', values=rows_to_insert)
 
-# 4. Otomatis Commit dan Push File JSON ke GitHub (Opsional jika dijalankan di GitHub Actions)
+# 4. Otomatis Commit dan Push File JSON ke GitHub
 try:
     print("🚀 Mengirim file JSON terbaru ke repositori GitHub...", flush=True)
     subprocess.run(["git", "config", "--global", "user.name", "GitHub Actions Bot"], check=True)
     subprocess.run(["git", "config", "--global", "user.email", "actions@github.com"], check=True)
     subprocess.run(["git", "add", "saham_history.json"], check=True)
-    subprocess.run(["git", "commit", "-m", "Auto-update: Refresh data historis 5 tahun dan ringkasan"], check=True)
+    subprocess.run(["git", "commit", -m "Auto-update: Refresh profil fundamental dan data historis"], check=True)
     subprocess.run(["git", "push"], check=True)
     print("✅ Berhasil melakukan push ke GitHub!", flush=True)
 except Exception as git_err:
