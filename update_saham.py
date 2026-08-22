@@ -98,7 +98,7 @@ for i, t in enumerate(daftar_ticker, start=1):
         df_subset = []
         if not df.empty:
             df_clean = df.reset_index()
-            cols_to_keep = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'MA50', 'RSI', 'MACD', 'Signal_Line']
+            cols_to_keep = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'MA50', 'MA20', 'RSI', 'MACD', 'Signal_Line']
             existing_cols = [c for c in cols_to_keep if c in df_clean.columns]
             df_subset_temp = df_clean[existing_cols].copy()
             
