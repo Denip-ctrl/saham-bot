@@ -30,3 +30,9 @@ jobs:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           python update_saham.py
+
+      - name: Commit and Push changes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-update: Refresh profil fundamental dan data historis termasuk MA20"
+          file_pattern: 'saham_history.json'
