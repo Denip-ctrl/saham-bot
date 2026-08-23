@@ -94,6 +94,46 @@ for i, t in enumerate(daftar_ticker, start=1):
         pbv = info.get('priceToBook', 0)
         if not pbv or pd.isna(pbv) or np.isinf(pbv): pbv = 0
 
+# Ekstraksi tambahan metrik fundamental & dividen dari yfinance info & history
+        trailing_pe = info.get('trailingPE', 0)
+        forward_pe = info.get('forwardPE', 0)
+        profit_margin = info.get('profitMargins', 0)
+        roe = info.get('returnOnEquity', 0)
+        revenue_growth = info.get('revenueGrowth', 0)
+
+        # Ekstraksi data Dividen
+        div_rate = info.get('dividendRate', 0.0)
+        payout_ratio_raw = info.get('payoutRatio', 0)
+        payout_ratio_pct = (payout_ratio_raw * 100) if payout_ratio_raw else 0.0
+        
+        # Ambil tanggal ex-dividend dari info (biasanya berupa timestamp)
+        ex_div_timestamp = info.get('exDividendDate')
+        ex_div_date_str = "Tidak Ada Data / N/A"
+        if ex_div_timestamp:
+            try:
+                ex_div_date_str = datetime.datetime.fromtimestamp(ex_div_timestamp).strftime('%d %b %Y')
+            except:
+                ex_div_date_str = str(ex_div_timestamp)
+
+        # Ambil riwayat dividen terakhir dari stock.dividends jika ada
+        last_div_date_str = "Belum Ada Riwayat"
+        last_div_amount = 0.0
+        try:
+            hist_div = stock.dividends
+            if not hist_div.empty:
+                last_div_date = hist_div.index[-1]
+                last_div_date_str = last_div_date.strftime('%d %b %Y')
+                last_div_amount = float(hist_div.iloc[-1])
+        except:
+            pass
+
+        # Bersihkan nilai jika None/NaN/inf
+        if not trailing_pe or pd.isna(trailing_pe) or np.isinf(trailing_pe): trailing_pe = 0
+        if not forward_pe or pd.isna(forward_pe) or np.isinf(forward_pe): forward_pe = 0
+        if not profit_margin or pd.isna(profit_margin) or np.isinf(profit_margin): profit_margin = 0
+        if not roe or pd.isna(roe) or np.isinf(roe): roe = 0
+        if not revenue_growth or pd.isna(revenue_growth) or np.isinf(revenue_growth): revenue_growth = 0
+
         # Persiapkan data histori untuk JSON
         df_subset = []
         if not df.empty:
@@ -106,7 +146,7 @@ for i, t in enumerate(daftar_ticker, start=1):
             df_subset_temp = df_subset_temp.replace({np.nan: None, np.inf: None, -np.inf: None})
             df_subset = df_subset_temp.to_dict(orient='records')
 
-        # --- PERUBAHAN UTAMA: Gabungkan Profile dan History ke dalam satu key Ticker ---
+        # --- UPDATE PROFILE LENGKAP DENGAN DIVIDEN ---
         master_complete_json[t] = {
             "profile": {
                 "name": str(nama),
@@ -114,7 +154,18 @@ for i, t in enumerate(daftar_ticker, start=1):
                 "marketCap": int(market_cap),
                 "divYield": f"{float(div_yield):.2f}%" if div_yield else "0%",
                 "pbv": round(float(pbv), 2),
-                "price": round(float(harga), 2)
+                "price": round(float(harga), 2),
+                "trailingPE": round(float(trailing_pe), 2) if trailing_pe else "-",
+                "forwardPE": round(float(forward_pe), 2) if forward_pe else "-",
+                "profitMargin": round(float(profit_margin), 4) if profit_margin else "-",
+                "roe": round(float(roe), 4) if roe else "-",
+                "revenueGrowth": round(float(revenue_growth), 4) if revenue_growth else "-",
+                # Tambahan key khusus dividen:
+                "divPerShare": round(float(div_rate), 2) if div_rate else 0.0,
+                "payoutRatio": round(float(payout_ratio_pct), 2),
+                "lastDivDate": last_div_date_str,
+                "lastDivAmount": round(float(last_div_amount), 2),
+                "exDivDate": ex_div_date_str
             },
             "history": df_subset
         }
