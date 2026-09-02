@@ -25,14 +25,18 @@ jobs:
         run: |
           pip install yfinance pandas numpy gspread oauth2client
 
-      - name: Run Script
+      - name: Run Update Saham Script
         env:
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
         run: |
           python update_saham.py
 
+      - name: Run Analisis & Prediksi Saham
+        run: |
+          python analisis_saham.py
+
       - name: Commit and Push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Auto-update: Refresh profil fundamental dan data historis termasuk MA20"
+          commit_message: "Auto-update: Refresh data historis dan analisis teknikal volume"
           file_pattern: 'saham_history.json'
